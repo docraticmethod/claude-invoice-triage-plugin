@@ -1,0 +1,80 @@
+# Plan: Build the invoice-triage Claude Code plugin
+
+## Context
+This is the Curie agent-developer screen exercise. The client request is a plugin that tells a finance user which unpaid invoices need attention today, using the supplied `list_open_invoices` MCP tool. The reporting date is **2026-10-19**. You are building it after the video session and will submit it through GitHub later.
+
+**Source of truth: `README.md`.** `AGENT.md` is a build aid. Where they differ, the README wins. The interview, timing, and narration parts of `AGENT.md` (the clarifying discussion, the 30-minute split, the Step 7 closing script) don't apply, so the plan drops them.
+
+## What I found
+- `agent-screen-starter/` is already cloned. It holds `mock_invoices.py` (4 synthetic invoices), `.mcp.json` (the `mock-invoices` stdio server run through `uv`), and `.claude/settings.local.json`, which already enables the server.
+- My earlier `mkdir` ran at `curie-python/invoice-triage/`. That is outside the starter repo, and the README says to create the plugin in a new directory inside the repository. The working directory is now `agent-screen-starter/`.
+- The mock data is an example. The command must work on whatever `list_open_invoices` returns and must not hard-code any invoice values.
+
+## Progress log (`log.txt`)
+Plan mode blocks file creation, so this happens first once the plan is approved.
+- **Step 0.** Create `agent-screen-starter/log.txt` in the working directory. It sits outside `invoice-triage/`, so it won't ship with the plugin. It opens with this final plan (Context, Steps, Verification, Submission), copied in full.
+- Each step below gets a completion line appended to `log.txt` the moment it finishes, in the form `[YYYY-MM-DD HH:MM:SS TZ] DONE Step N: <what was done>`. The timestamp comes from `date`, not from memory.
+- Step 0 gets its own line too. Verification results and any problems go in as extra lines, and a step that fails is logged as FAILED, not DONE.
+
+## Steps
+1. **Relocate the scaffold.** Create `agent-screen-starter/invoice-triage/{.claude-plugin,commands}`. Then remove the stray empty `curie-python/invoice-triage/` so there aren't two copies.
+2. **Manifest.** Write `invoice-triage/.claude-plugin/plugin.json` with name `invoice-triage`, the description from AGENT.md, and version `0.1.0`.
+3. **Command.** Write `invoice-triage/commands/invoices-today.md`:
+   - Frontmatter: a description, plus `allowed-tools: mcp__mock-invoices__list_open_invoices` so the command can only use that one read-only tool.
+   - Call `list_open_invoices` from the `mock-invoices` MCP server. Don't read `mock_invoices.py`.
+   - Convert `balance_cents` to dollars.
+   - Bucket the invoices with 2026-10-19 as the reporting date:
+     - PAST DUE: due before 10-19.
+     - DUE WITHIN 7 DAYS: 10-19 through 10-26 inclusive.
+     - MISSING INFORMATION: null `due_date`.
+   - Handle any invoice that fits none of the three buckets (for example, due more than 7 days out) by leaving it out of the report, and say so.
+   - Sort each bucket by balance, descending.
+   - Print a table per bucket with id, customer, balance, due_date, and days overdue. Days overdue is filled in only for past-due invoices and blank otherwise.
+   - Close with total past-due exposure and the single top-priority account.
+   - State that the command is read-only: no messages sent, no data modified.
+4. **Plugin README (small).** Add `invoice-triage/README.md` with how to run it, the bucket definitions, and the assumptions: the fixed reporting date, the 7-day window, and null due dates reported rather than aged. A reviewer will see this on GitHub.
+5. **Skipped on purpose.** The `triage.py` script from the AGENT.md optional upgrade. A script run through Bash can't call the MCP tool, so the JSON would have to be passed in, and that weakens the determinism argument. I'll revisit if you want it.
+
+## Verification
+1. From `agent-screen-starter/`, run `claude --plugin-dir ./invoice-triage` as a fresh launch. Plugins load at launch.
+2. Run `/mcp` and confirm `mock-invoices` is connected.
+3. Run `/invoices-today` and check the output against the current mock data:
+   - Past due: Acme INV-101 $1,200.00 (30 days) first, then Beta INV-102 $800.00 (31 days).
+   - Due within 7 days: Coda INV-103 $500.00, due 2026-10-25.
+   - Missing information: Delta INV-104 $250.00, no due date.
+   - Total past-due exposure is $2,000.00. Top priority is Acme.
+4. Confirm no write or send tools were called and that `mock_invoices.py` was not edited.
+
+## Submission (later, not part of this build)
+The README says to share the plugin directory or a private repo, and not to open a public PR against the starter repo. The starter repo's remote points at the public `curie-eng` repo, so nothing should be pushed there. When you're ready, I can put `invoice-triage/` in its own new private repo. That is an outward-facing action, so I'll confirm with you before creating or pushing anything.
+
+## Consistency notes (AGENT.md vs README)
+- Consistent: the reporting date, the `--plugin-dir` launch and restart note, the read-only rule, cents to dollars, and the private-sharing rule.
+- AGENT.md's "exactly four invoices" is true for this mock data only. The README just calls the data synthetic.
+- AGENT.md says "blank when missing" for days overdue. Coda has a date and isn't overdue, so the plan uses "blank unless past due".
+- The README says `status` is always `open`, so the command doesn't filter on it.
+- AGENT.md has an empty section at lines 6-10. I'm treating that as nothing missing.
+- The 7-day window is hard-coded. Making it an argument is possible but not required by the README.
+
+## Constraints
+- The command is read-only. It sends no messages and changes no invoice data.
+
+## Execution log
+[2026-10-20 11:21:59 PDT] DONE Step 0: created log.txt containing the final plan
+[2026-10-20 11:22:09 PDT] DONE Step 1: scaffold created in agent-screen-starter/invoice-triage; removed empty stray curie-python/invoice-triage
+[2026-10-20 11:22:32 PDT] DONE Step 2: wrote invoice-triage/.claude-plugin/plugin.json (valid JSON)
+[2026-10-20 11:22:32 PDT] DONE Step 3: wrote invoice-triage/commands/invoices-today.md
+[2026-10-20 11:22:32 PDT] DONE Step 4: wrote invoice-triage/README.md
+[2026-10-20 11:22:32 PDT] SKIPPED Step 5: triage.py script, by design (see plan)
+[2026-10-20 11:22:57 PDT] DONE Verification: headless run of /invoice-triage:invoices-today matched expected output (Acme $1,200/30d, Beta $800/31d, Coda $500, Delta $250 null; past-due total $2,000.00; top priority Acme). git status shows mock_invoices.py unmodified. Interactive /mcp check not run.
+
+## Tests (added after the build)
+[2026-10-20 11:24:18 PDT] DONE Step 6: wrote invoice-triage/tests/test_invoice_triage.py (stdlib unittest; manifest, command file, mock data, date-boundary rules, opt-in live end-to-end) and a Tests section in invoice-triage/README.md
+[2026-10-20 11:24:18 PDT] RESULT offline: python3 -m unittest discover -s invoice-triage/tests -v -> Ran 23 tests, OK (skipped=4, the live tests)
+[2026-10-20 11:24:18 PDT] RESULT live: RUN_LIVE=1 python3 -m unittest discover -s invoice-triage/tests -v -> Ran 23 tests in 16.360s, OK (0 skipped)
+[2026-10-20 11:25:47 PDT] DONE Client demo: ran /invoice-triage:invoices-today headlessly and showed the output to the user; figures matched expected (past due Acme $1,200/30d, Beta $800/31d; Coda $500; Delta $250 null; total $2,000.00; top priority Acme)
+
+## Usage note
+Architect's Note: MCP Plugin - change directory to /agent-screen-starter/
+[2026-10-20 11:35:12 PDT] NOTE start command, as given by the user: "claude --plugin-dir ./invoice-triage::invoices-today"
+[2026-10-20 11:35:12 PDT] NOTE as tested, this is two parts: (1) shell: claude --plugin-dir ./invoice-triage  (2) inside the session: /invoices-today (also accepted: /invoice-triage:invoices-today, the form used in the headless runs). The "::" form was not run.
