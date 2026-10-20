@@ -1,0 +1,5 @@
+{
+  "name": "invoice-triage",
+  "description": "Flags unpaid invoices needing attention as of the reporting date.",
+  "version": "0.1.0"
+}

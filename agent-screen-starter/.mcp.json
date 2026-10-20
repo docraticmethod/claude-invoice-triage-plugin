@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "mock-invoices": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "--no-project",
+        "--python",
+        ">=3.10",
+        "--with",
+        "mcp==2.3.0",
+        "python",
+        "${CLAUDE_PROJECT_DIR:-.}/mock_invoices.py"
+      ]
+    }
+  }
+}
